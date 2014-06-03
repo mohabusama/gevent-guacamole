@@ -22,7 +22,7 @@ def run(address='', port=6060, endpoint='/', static=False, debug=False):
         resources.update(get_webapp_resources(debug))
 
     WebSocketServer(
-        (address, port),
+        (address, int(port)),
         Resource(resources),
         debug=debug
     ).serve_forever()
