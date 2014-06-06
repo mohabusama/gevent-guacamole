@@ -21,6 +21,7 @@ HOST = '192.168.20.14'
 PORT = 3389
 DOMAIN = 'guacg'
 APP = '||notepad'
+SEC = ''
 ```
 
 [Install](http://guac-dev.org/doc/gug/installing-guacamole.html) & Run Guacamole **guacd** (0.9.0) server. Preferably in foreground to view the connection output.
