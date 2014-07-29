@@ -2,6 +2,8 @@ import json
 import uuid
 import gevent
 
+from parking import ParkingLot
+
 from geventwebsocket import WebSocketApplication
 
 from guacamole.client import GuacamoleClient, PROTOCOL_NAME
@@ -20,7 +22,24 @@ except ImportError:
 
 
 # Paused GuacamoleClients. The key is client Session ID.
-PAUSED_CLIENTS = {}
+PARKED_CLIENTS = ParkingLot()
+
+
+def park_client(client):
+    """
+    Park client in ParkingLot.
+    """
+    PARKED_CLIENTS[client.id] = client
+
+
+def retrieve_client(id):
+    """
+    Retrieve client from ParkingLot.
+    """
+    try:
+        return PARKED_CLIENTS.pop(id)
+    except KeyError:
+        return None
 
 
 class GuacamoleApp(WebSocketApplication):
@@ -31,6 +50,12 @@ class GuacamoleApp(WebSocketApplication):
 
         # Guest WS client List.
         self.guests = list()
+
+        # Is connection paused?
+        self.paused = False
+
+        self.master = self.control = False
+        self.master_session_id = None
 
         super(GuacamoleApp, self).__init__(ws)
 
@@ -82,7 +107,8 @@ class GuacamoleApp(WebSocketApplication):
         """
         Websocket closed.
         """
-        # @todo: consider reconnect from client. (network glitch?!)
+        # @TODO: consider reconnect from client. (network glitch?!)
+        # @TODO: One solution is to pause client instead of termination.
         if not self.ws_client.master:
             # This is a guest. Let the master know!
             master_ws_client = self._get_ws_client(self.master_session_id)
@@ -90,8 +116,11 @@ class GuacamoleApp(WebSocketApplication):
                 self._leave_client(master_ws_client)
 
         self._stop_listener()
-        self.client.close()
-        self.client = None
+
+        if not self.paused:
+            # Close connection if we are not paused!
+            self.client.close()
+            self.client = None
 
     def connect(self, args):
         """
@@ -117,6 +146,7 @@ class GuacamoleApp(WebSocketApplication):
         elif connection_args.resume and connection_args.sessionId:
             # A client is resuming a paused session
             self.resume(connection_args.sessionId)
+            self._start_listener()
         else:
             # A client is starting a new session
             # @TODO: get Remote server connection properties
@@ -147,11 +177,22 @@ class GuacamoleApp(WebSocketApplication):
 
         self._join_client(master_ws_client)
 
-    def resume(self):
+    def resume(self, session_id):
         """
         A session master is resuming a paused session.
         """
-        return
+        # First, get the parked client, if exists!
+        self.client = retrieve_client(session_id)
+
+        if not self.client:
+            # Client was not parked!
+            # @TODO: Raise custom exception, return error!
+            # @TODO: is client controlled by another master WS?!
+            return None
+
+        # @TODO: Disconnect if client is controlled by another WS.
+
+        self.paused = False
 
     def pause(self):
         """
@@ -160,6 +201,11 @@ class GuacamoleApp(WebSocketApplication):
         if not self.master:
             # A guest cannot pause a session!
             return
+
+        # To avoid client termination.
+        self.paused = True
+
+        park_client(self.client)
 
     def control(self):
         """
@@ -194,7 +240,11 @@ class GuacamoleApp(WebSocketApplication):
             return
 
         for guest in self.guests:
-            guest.ws.send(instruction)
+            try:
+                guest.ws.send(instruction)
+            except:
+                # log exception!
+                pass
 
     def _start_listener(self):
         if self._listener:
