@@ -128,33 +128,40 @@ class GuacamoleApp(WebSocketApplication):
 
         :param args: JSON string of client supplied connection args
         """
-        connection_args = json.loads(args)
+        try:
+            connection_args = json.loads(args)
+        except:
+            connection_args = {
+                'guest': False, 'sessionId': None, 'resume': False
+            }
 
-        if connection_args.guest and connection_args.sessionId:
+        if connection_args['guest'] and connection_args['sessionId']:
             # A guest is joining an existing session.
 
             try:
-                self.join(connection_args.sessionId)
+                self.join(connection_args['sessionId'])
             except:
                 # @TODO: handle error!
                 pass
 
             # Set guest properties
-            self.master_session_id = connection_args.sessionId
+            self.master_session_id = connection_args['sessionId']
             self.master = self.control = False
             return
-        elif connection_args.resume and connection_args.sessionId:
+        elif connection_args['resume'] and connection_args['sessionId']:
             # A client is resuming a paused session
-            self.resume(connection_args.sessionId)
+            self.resume(connection_args['sessionId'])
             self._start_listener()
         else:
             # A client is starting a new session
             # @TODO: get Remote server connection properties
+            # self.client.handshake(protocol='rdp', hostname=HOST,
+            #                       port=PORT, username=USERNAME,
+            #                       password=PASSWORD, domain=DOMAIN,
+            #                       security=SEC, remote_app=APP)
             self.client.handshake(protocol='rdp', hostname=HOST,
                                   port=PORT, username=USERNAME,
-                                  password=PASSWORD, domain=DOMAIN,
-                                  security=SEC, remote_app=APP)
-
+                                  password=PASSWORD)
             self._start_listener()
 
         # In case of session resume or new session
