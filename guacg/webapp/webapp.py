@@ -5,6 +5,7 @@ from werkzeug.debug import DebuggedApplication
 
 WEBAPP_PATH = os.path.abspath(os.path.dirname(__file__))
 STATIC_PATH = os.path.join(WEBAPP_PATH, 'static')
+GUACG_JS_PATH = os.path.join(WEBAPP_PATH, '..', '..', 'js')
 
 flask_app = Flask(__name__)
 
@@ -16,6 +17,9 @@ def index():
 
 @flask_app.route('/static/<string:filename>')
 def send_static(filename):
+    if filename == 'guacg.js':
+        return send_from_directory(GUACG_JS_PATH, filename)
+
     return send_from_directory(STATIC_PATH, filename)
 
 

@@ -7,7 +7,7 @@ var guac = new Guacamole.Client(
 );
 
 // Add client to display div
-display.appendChild(guac.getDisplay());
+display.appendChild(guac.getDisplay().getElement());
 
 // Error handler
 guac.onerror = function(error) {
@@ -23,7 +23,7 @@ window.onunload = function() {
 }
 
 // Mouse
-var mouse = new Guacamole.Mouse(guac.getDisplay());
+var mouse = new Guacamole.Mouse(guac.getDisplay().getElement());
 
 mouse.onmousedown =
 mouse.onmouseup   =

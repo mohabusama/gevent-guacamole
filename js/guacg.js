@@ -66,14 +66,14 @@
         guacgTunnel = new Guacamole.WebSocketTunnel(tunnelUri);
         guacgClient = new Guacamole.Client(guacgTunnel);
 
-        display.appendChild(guacgClient.getDisplay());
+        display.appendChild(guacgClient.getDisplay().getElement());
 
         // Connect
         guacgClient.connect();
 
         // Patch tunnel oninstruction to intercept GuacG custom instructions
         originalOnInstruction = guacgTunnel.oninstruction;
-        guacgTunnel.oninstruction = app.oninstruction; 
+        guacgTunnel.oninstruction = app.oninstruction;
 
         // Send *custom* connection args
         var connectionArgs = args || {};
@@ -100,7 +100,7 @@
 
     this.join = function(sessionId, args) {
         var connectionArgs = args || {};
-        
+
         // SessionId to join
         connectionArgs.sessionId = sessionId;
         connectionArgs.guest = true;
@@ -133,14 +133,14 @@
     }
 
     this.setHandlers = function() {
-        
+
         // Default handlers
         window.onunload = function() {
             guacgClient.disconnect();
         }
 
         // Mouse
-        mouse = new Guacamole.Mouse(guac.getDisplay());
+        mouse = new Guacamole.Mouse(guacgClient.getDisplay().getElement());
 
         mouse.onmousedown =
         mouse.onmouseup   =
