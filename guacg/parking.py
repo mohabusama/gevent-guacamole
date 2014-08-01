@@ -52,7 +52,10 @@ class ParkingLot(dict):
         """
         Pop specific GuacamoleClient.
         """
-        space = super(ParkingLot, self).pop(key)
+        space = super(ParkingLot, self).pop(key, *args)
+
+        if not isinstance(space, ClientSpace):
+            return space
 
         # Stop the listener
         space.stop_listener()

@@ -36,10 +36,7 @@ def retrieve_client(id):
     """
     Retrieve client from ParkingLot.
     """
-    try:
-        return PARKED_CLIENTS.pop(id)
-    except KeyError:
-        return None
+    return PARKED_CLIENTS.pop(id, None)
 
 
 class GuacamoleApp(WebSocketApplication):
@@ -91,6 +88,7 @@ class GuacamoleApp(WebSocketApplication):
         """
         New message received on the websocket.
         """
+        # @TODO: FIX this condition. it is always true for guests!
         if not self.client.connected:
             # Client is not connected, message should include connection args
             return self.connect(message)
@@ -101,6 +99,7 @@ class GuacamoleApp(WebSocketApplication):
         else:
             if self.control:
                 # Send message to guacd server if on control!
+                # @TODO: Needs a FIX, as *only* Master client should be used!
                 self.client.send(message)
 
     def on_close(self, reason):
@@ -238,7 +237,7 @@ class GuacamoleApp(WebSocketApplication):
 
     def broadcast(self, instruction):
         """
-        Broadcast instruction to all connected sockets on this session.
+        Broadcast instruction to all connected websockets on this session.
 
         :param instruction: Instruction string to be delivered to all guests.
         """

@@ -23,14 +23,14 @@
 var Guacamole = Guacamole || {};
 
 /**
- * A writer which automatically writes to the given output stream with text
- * data.
+ * A writer which automatically writes to the given output stream with arbitrary
+ * binary data, supplied as ArrayBuffers.
  * 
  * @constructor
  * @param {Guacamole.OutputStream} stream The stream that data will be written
  *                                        to.
  */
-Guacamole.StringWriter = function(stream) {
+Guacamole.ArrayBufferWriter = function(stream) {
 
     /**
      * Reference to this Guacamole.StringWriter.
@@ -45,12 +45,44 @@ Guacamole.StringWriter = function(stream) {
     };
 
     /**
-     * Sends the given text.
+     * Encodes the given data as base64, sending it as a blob. The data must
+     * be small enough to fit into a single blob instruction.
      * 
-     * @param {String} text The text to send.
+     * @private
+     * @param {Uint8Array} bytes The data to send.
      */
-    this.sendText = function(text) {
-        stream.sendBlob(window.btoa(text));
+    function __send_blob(bytes) {
+
+        var binary = "";
+
+        // Produce binary string from bytes in buffer
+        for (var i=0; i<bytes.byteLength; i++)
+            binary += String.fromCharCode(bytes[i]);
+
+        // Send as base64
+        stream.sendBlob(window.btoa(binary));
+
+    }
+
+    /**
+     * Sends the given data.
+     * 
+     * @param {ArrayBuffer|TypedArray} data The data to send.
+     */
+    this.sendData = function(data) {
+
+        var bytes = new Uint8Array(data);
+
+        // If small enough to fit into single instruction, send as-is
+        if (bytes.length <= 8064)
+            __send_blob(bytes);
+
+        // Otherwise, send as multiple instructions
+        else {
+            for (var offset=0; offset<bytes.length; offset += 8064)
+                __send_blob(bytes.subarray(offset, offset + 8094));
+        }
+
     };
 
     /**
