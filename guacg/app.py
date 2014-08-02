@@ -93,7 +93,7 @@ class GuacamoleApp(WebSocketApplication):
             # Client is not connected, message should include connection args
             return self.connect(message)
 
-        if message.startswith('5.guacg'):
+        if message and message.startswith('5.guacg'):
             # This is a guacg custom instruction
             return
         else:
@@ -127,16 +127,10 @@ class GuacamoleApp(WebSocketApplication):
 
         :param args: JSON string of client supplied connection args
         """
-        try:
-            connection_args = json.loads(args)
-        except:
-            connection_args = {
-                'guest': False, 'sessionId': None, 'resume': False
-            }
+        connection_args = self._get_connection_args(args)
 
         if connection_args['guest'] and connection_args['sessionId']:
             # A guest is joining an existing session.
-
             try:
                 self.join(connection_args['sessionId'])
             except:
@@ -154,13 +148,7 @@ class GuacamoleApp(WebSocketApplication):
         else:
             # A client is starting a new session
             # @TODO: get Remote server connection properties
-            # self.client.handshake(protocol='rdp', hostname=HOST,
-            #                       port=PORT, username=USERNAME,
-            #                       password=PASSWORD, domain=DOMAIN,
-            #                       security=SEC, remote_app=APP)
-            self.client.handshake(protocol='rdp', hostname=HOST,
-                                  port=PORT, username=USERNAME,
-                                  password=PASSWORD)
+            self.client.handshake(**connection_args)
             self._start_listener()
 
         # In case of session resume or new session
@@ -320,3 +308,50 @@ class GuacamoleApp(WebSocketApplication):
                 break
 
         # @TODO: Notify master!
+
+    def _get_connection_args(self, args):
+        """
+        Return connection args for starting remote session.
+
+        :param args: JSON string.
+        """
+        # @TODO: Add more default args:
+        # http://guac-dev.org/doc/gug/configuring-guacamole.html
+        default_args = {
+            # connection params - required by guacd
+            'protocol': 'rdp',
+            'width': 1024,
+            'height': 768,
+            'dpi': 96,
+            'audio': [],
+            'video': [],
+
+            # server connection params
+            'hostname': HOST,
+            'port': PORT,
+            'username': USERNAME,
+            'password': PASSWORD,
+
+            # optional server params - must be supplied by JS client!
+            # 'domain': DOMAIN,
+            # 'remote_app': APP,
+            # 'security': SEC,
+
+            # internal params - not required by guacd
+            'guest': False,
+            'sessionId': None,
+            'resume': False
+        }
+
+        if not args:
+            return default_args
+
+        try:
+            connection_args = json.loads(args)
+        except:
+            return default_args
+
+        # Update default values, and add extra args!
+        default_args.update(connection_args)
+
+        return default_args

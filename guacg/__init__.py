@@ -25,7 +25,7 @@ import logging
 
 VERSION = '0.1'
 
-GUACAMOLE_VERSION = '0.9.0'
+GUACAMOLE_VERSION = '0.9.1'
 
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.INFO)

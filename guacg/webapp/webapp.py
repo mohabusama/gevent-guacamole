@@ -17,7 +17,7 @@ def index():
 
 @flask_app.route('/static/<string:filename>')
 def send_static(filename):
-    if filename == 'guacg.js':
+    if filename.startswith('guacg'):
         return send_from_directory(GUACG_JS_PATH, filename)
 
     return send_from_directory(STATIC_PATH, filename)

@@ -31,28 +31,28 @@
         guacgTunnel = null,
         originalOnInstruction = null,
         display = null
-        keyboard,
-        mouse;
+        keyboard = null,
+        mouse = null;
 
     var instructionHandlers = {
 
-        'controlreq': function(parameters) {
+        controlreq: function(parameters) {
             if (app.onControlReq) {
                 onControlReq(parameters);
             }
         },
 
-        'error': function(parameters) {
+        error: function(parameters) {
 
         },
 
-        'guestjoined': function(parameters) {
+        guestjoined: function(parameters) {
             if (app.onGuestJoined) {
                 app.onGuestJoined(parameters);
             }
         },
 
-        'guestleft': function(parameters) {
+        guestleft: function(parameters) {
             if (app.onGuestLeft) {
                 app.onGuestLeft(parameters);
             }
