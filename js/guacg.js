@@ -77,7 +77,7 @@
 
         // Send *custom* connection args
         var connectionArgs = args || {};
-        app.send('args', JSON.stringify(connectionArgs))
+        app.send('connect', JSON.stringify(connectionArgs))
 
         app.setHandlers();
     }
