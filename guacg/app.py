@@ -10,7 +10,7 @@ from guacamole.client import GuacamoleClient, PROTOCOL_NAME
 from instruction import GuacgInstruction
 
 # IMPORTANT. Set of opcodes that can be called from js client.
-ALLOWED_OPCODES = ('pause', 'control', 'remove', 'approve')
+ALLOWED_OPCODES = ('pause', 'control', 'remove', 'approve', 'reject')
 
 try:
     # Add local_settings.py with RDP connection variables
@@ -95,9 +95,9 @@ class GuacamoleApp(WebSocketApplication):
         """
         New message received on the websocket.
         """
-        # @TODO: FIX this condition. it is always true for guests!
-        if not self.client.connected:
-            # Client is not connected, message should include connection args
+        if self.is_connect(message):
+            # Client is not connected, message should include connection args.
+            # @TODO: Check possibility/consequences of duplicate `connect`
             return self.connect(message)
 
         if GuacgInstruction.is_valid(message):
@@ -132,21 +132,35 @@ class GuacamoleApp(WebSocketApplication):
     # GEVENT GUACAMOLE CONNECTION METHODS
     ###########################################################################
 
+    def is_connect(self, instruction):
+        """
+        Checks if instruction is a valid `connect` instruction.
+
+        :param instruction: Instruction string.
+
+        :return: True if `connect` instruction, False otherwise.
+        """
+        if not GuacgInstruction.is_valid(instruction):
+            return False
+
+        inst = GuacgInstruction.load(instruction)
+
+        if inst.opcode != 'connect':
+            return False
+
+        return True
+
     def connect(self, instruction):
         """
         Connect to guacd server and start listener.
 
         :param instruction: A `connect` instruction with connection args.
         """
-        if not GuacgInstruction.is_valid(instruction):
+        if not self.is_connect(instruction):
             # @TODO: Raise exception.
             return
 
         inst = GuacgInstruction.load(instruction)
-
-        if inst.opcode != 'connect':
-            # @TODO: Raise exception.
-            return
 
         connection_args = self._get_connection_args(inst.json_args)
 
@@ -168,34 +182,11 @@ class GuacamoleApp(WebSocketApplication):
             self._start_listener()
         else:
             # A client is starting a new session
-            # @TODO: get Remote server connection properties
             self.client.handshake(**connection_args)
             self._start_listener()
 
         # In case of session resume or new session
         self.master = self.control = True
-
-    def handle_custom_instruction(self, instruction):
-        """
-        Handle custom instruction sent by client.
-
-        :param instruction: Custom GuacgInstruction string.
-        """
-        if not GuacgInstruction.is_valid(instruction):
-            # TODO: raise exception?
-            return
-
-        # Load custom instruction.
-        inst = GuacgInstruction.load(instruction)
-
-        if inst.opcode not in ALLOWED_OPCODES:
-            # TODO: raise exception?
-            return
-
-        method = getattr(self, inst.opcode)
-
-        # call the valid method.
-        return method(inst.json_args)
 
     def join(self, session_id):
         """
@@ -279,6 +270,28 @@ class GuacamoleApp(WebSocketApplication):
     # GEVENT GUACAMOLE OPCODE METHODS
     ###########################################################################
 
+    def handle_custom_instruction(self, instruction):
+        """
+        Handle custom instruction sent by client.
+
+        :param instruction: Custom GuacgInstruction string.
+        """
+        if not GuacgInstruction.is_valid(instruction):
+            # TODO: raise exception?
+            return
+
+        # Load custom instruction.
+        inst = GuacgInstruction.load(instruction)
+
+        if inst.opcode not in ALLOWED_OPCODES:
+            # TODO: raise exception?
+            return
+
+        method = getattr(self, inst.opcode)
+
+        # Call the valid method.
+        return method(inst.json_args)
+
     def pause(self, args):
         """
         Pause current session.
@@ -307,6 +320,16 @@ class GuacamoleApp(WebSocketApplication):
     def approve(self, args):
         """
         Master approves granting control to a guest.
+
+        :param args: json args.
+        """
+        if not self.master:
+            return
+        return
+
+    def reject(self, args):
+        """
+        Master rejects granting control to a guest.
 
         :param args: json args.
         """

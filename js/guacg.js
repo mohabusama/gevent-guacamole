@@ -69,7 +69,7 @@
         display.appendChild(guacgClient.getDisplay().getElement());
 
         // Connect
-        guacgClient.connect();
+        guacgClient.connect('');
 
         // Patch tunnel oninstruction to intercept GuacG custom instructions
         originalOnInstruction = guacgTunnel.oninstruction;
@@ -77,9 +77,16 @@
 
         // Send *custom* connection args
         var connectionArgs = args || {};
-        app.send('connect', JSON.stringify(connectionArgs))
 
-        app.setHandlers();
+        // Make sure we send `connect` when Websocket tunnel is ready.
+        connectInterval = window.setInterval(function() {
+            if(guacgTunnel.state === Guacamole.Tunnel.State.OPEN) {
+                // Send `connect` instruction with connection args.
+                app.send('connect', JSON.stringify(connectionArgs))
+                app.setHandlers();
+                clearInterval(connectInterval);
+            }
+        }, 500);
     }
 
     this.pause = function(args) {
