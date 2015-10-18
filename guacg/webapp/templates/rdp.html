@@ -2,9 +2,19 @@
 <html>
     <head>
         <title>GuacG | Gevent Websocket Guacamole Broker</title>
+
+        <script type="text/javascript" src="http://code.jquery.com/jquery-2.1.1.min.js"></script>
+        <link rel="stylesheet" href="//maxcdn.bootstrapcdn.com/bootstrap/3.2.0/css/bootstrap.min.css">
     </head>
     <body>
-        <div id='display'></div>
+        <div class="col-md-1 col-md-offset-5" style="position: fixed;z-index: 1000;top: 0px;">
+            <button id="resume" type="button" class="btn btn-default" data-attr-status="on">
+                <span class="glyphicon glyphicon-pause" title="Pause"></span>
+                <!-- <span class="glyphicon glyphicon-play" title="Resume"></span> -->
+            </button>
+        </div>
+
+        <div id='display' style="min-height:1500px;"></div>
 
         <!-- Guacamole libs -->
         <script src="{{ url_for('static', filename='ArrayBufferReader.js') }}"></script>

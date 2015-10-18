@@ -1,13 +1,13 @@
 from gevent import monkey
 monkey.patch_all()
 
-import argparse
+import argparse  # noqa
 
-from geventwebsocket import WebSocketServer, Resource
+from geventwebsocket import WebSocketServer, Resource  # noqa
 
-from webapp.webapp import get_webapp_resources
+from webapp.webapp import get_webapp_resources  # noqa
 
-from app import GuacamoleApp
+from app import GuacamoleApp  # noqa
 
 
 def run(address='', port=6060, endpoint='/', static=False, debug=False):

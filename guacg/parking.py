@@ -91,6 +91,10 @@ class ClientSpace():
     def __init__(self, key, client):
         self.key = key
         self.client = client
+        self._listener = None
+
+        print 'PARKING CLIENT: ' + self.key
+
         self.start_listener()
 
     def start_listener(self):
@@ -114,6 +118,7 @@ class ClientSpace():
         """
         A listener to retain GuacamoleClient connection with guacd server.
         """
+        print 'STARTED PARKED LISTENER!'
         while True:
             instruction = Instruction.load(self.client.receive())
             self.respond(instruction)
@@ -126,6 +131,7 @@ class ClientSpace():
         """
         if instruction.opcode == 'sync':
             # respond with a sync message
+            print 'RESPONDING TO SYNC!'
             ts = instruction.args[0]
             response = Instruction('sync', ts)
             self.client.send_instruction(response)

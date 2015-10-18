@@ -35,7 +35,7 @@ class GuacgInstruction(GuacamoleInstruction):
         # self.args and self.opcode should be ready!
         super(GuacgInstruction, self).__init__(opcode, *args, **kwargs)
 
-        # Get self.json_args and self.api is applicable.
+        # Get self.json_args and self.api if applicable.
         self.parse()
 
     @staticmethod
@@ -66,7 +66,7 @@ class GuacgInstruction(GuacamoleInstruction):
             raise RuntimeError('Invalid GuacG instruction.')
 
         # Remove GuacG prefix
-        instruction_str = instruction.lstrip(GUACG_PREFIX + ARG_SEP)
+        instruction_str = instruction[len(GUACG_PREFIX + ARG_SEP):]
 
         return super(GuacgInstruction, cls).load(instruction_str)
 
@@ -101,6 +101,26 @@ class GuacgInstruction(GuacamoleInstruction):
             # This is a normal custom instruction
             self.json_args = load_json(self.args[0])
 
+    @staticmethod
+    def encode_arg(arg):
+        """
+        Encode argument to be sent in a valid GuacamoleInstruction.
+        Overriden to make sure dict arg is converted to valid json string.
+
+        example:
+        >> arg = encode_arg({'arg':'1'})
+        >> arg == '12.{"arg": "1"}'
+        >> True
+
+        :param arg: arg string.
+
+        :return: str
+        """
+        if isinstance(arg, dict):
+            arg = json.dumps(arg)
+
+        return GuacamoleInstruction.encode_arg(arg)
+
     def encode(self):
         """
         Prepare the *custom* instruction to be sent over the wire.
@@ -112,4 +132,4 @@ class GuacgInstruction(GuacamoleInstruction):
         # Make sure GUACG_PREFIX is prepended to our instruction string
         instruction_str = GUACG_PREFIX + ARG_SEP + instruction_str
 
-        return instruction_str
+        return '%s' % instruction_str

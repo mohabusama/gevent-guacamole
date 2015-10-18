@@ -6,6 +6,7 @@ from parking import ParkingLot
 from geventwebsocket import WebSocketApplication
 
 from guacamole.client import GuacamoleClient, PROTOCOL_NAME
+from guacamole.instruction import GuacamoleInstruction as Instruction
 
 from instruction import GuacgInstruction
 
@@ -89,16 +90,22 @@ class GuacamoleApp(WebSocketApplication):
         self.client = GuacamoleClient('localhost', 4822)
 
         # @TODO: Move this to GuacamoleClient.
-        self.client.id = uuid.uuid1()
+        self.client.id = str(uuid.uuid4())
 
     def on_message(self, message):
         """
         New message received on the websocket.
         """
+        if GuacgInstruction.is_valid(message):
+            print message
+
         if self.is_connect(message):
             # Client is not connected, message should include connection args.
             # @TODO: Check possibility/consequences of duplicate `connect`
             return self.connect(message)
+
+        if self.paused:
+            return
 
         if GuacgInstruction.is_valid(message):
             # This is a guacg custom instruction
@@ -107,6 +114,7 @@ class GuacamoleApp(WebSocketApplication):
             if self.control:
                 # Send message to guacd server if on control!
                 # @TODO: Needs a FIX, as *only* Master client should be used!
+                print 'SENDING: ' + message
                 self.client.send(message)
 
     def on_close(self, reason):
@@ -115,6 +123,7 @@ class GuacamoleApp(WebSocketApplication):
         """
         # @TODO: consider reconnect from client. (network glitch?!)
         # @TODO: One solution is to pause client instead of termination.
+        print 'SOCKET CLOSED: ' + self.client.id
         if not self.master:
             # This is a guest. Let the master know!
             master_ws_client = self._get_ws_client(self.master_session_id)
@@ -175,11 +184,13 @@ class GuacamoleApp(WebSocketApplication):
             # Set guest properties
             self.master_session_id = connection_args['sessionId']
             self.master = self.control = False
-            return
+
+            # notify guest client that session has started
+            return self.notify('sessionstarted',
+                               {'sessionId': self.master_session_id})
         elif connection_args['resume'] and connection_args['sessionId']:
             # A client is resuming a paused session
-            self.resume(connection_args['sessionId'])
-            self._start_listener()
+            self.resume(connection_args['sessionId'], connection_args)
         else:
             # A client is starting a new session
             self.client.handshake(**connection_args)
@@ -187,6 +198,9 @@ class GuacamoleApp(WebSocketApplication):
 
         # In case of session resume or new session
         self.master = self.control = True
+
+        return self.notify('sessionstarted',
+                           {'sessionId': self.client.id})
 
     def join(self, session_id):
         """
@@ -205,22 +219,46 @@ class GuacamoleApp(WebSocketApplication):
 
         self._join_master(master_ws_client)
 
-    def resume(self, session_id):
+    def resume(self, session_id, connection_args):
         """
         A session master is resuming a paused session.
+
+        :param session_id: Paused session ID. ID of parked GuacamoleClient.
+
+        :param connection_args: dict with optional connection args
         """
+        print '============'
+        print 'RESUMING ' + session_id
         # First, get the parked client, if exists!
         self.client = retrieve_client(session_id)
+
+        print 'RESUMING CLIENT: ' + self.client.id
 
         if not self.client:
             # Client was not parked!
             # @TODO: Raise custom exception, return error!
             # @TODO: is client controlled by another master WS?!
+            print 'NO CLIENT'
             return None
 
         # @TODO: Disconnect if client is controlled by another WS.
 
         self.paused = False
+
+        # Adjust size
+        if 'width' in connection_args and 'height' in connection_args:
+            size_inst = Instruction('size', 0,
+                                    connection_args['width'],
+                                    connection_args['height']).encode()
+            self.ws.send(size_inst)
+
+        # Start the listener!
+        self._start_listener()
+
+        self.client.send_instruction(Instruction('size',
+                                                 connection_args['width'],
+                                                 connection_args['height'],
+                                                 96))
 
     def _get_connection_args(self, connection_args):
         """
@@ -305,7 +343,13 @@ class GuacamoleApp(WebSocketApplication):
         # To avoid client termination.
         self.paused = True
 
+        self._stop_listener()
+
         park_client(self.client)
+
+        print 'PARKED CLIENT! - ' + self.client.id
+
+        self.notify('sessionpaused')
 
     def control(self, args):
         """
@@ -354,31 +398,39 @@ class GuacamoleApp(WebSocketApplication):
         # @TODO: Notify guest!
 
     ###########################################################################
-    # GEVENT GUACAMOLE NOTIFICATION/BROADCAST METHODS
+    # GEVENT GUACAMOLE EVENTS/NOTIFICATION/BROADCAST METHODS
     ###########################################################################
 
-    def notify(self, message, client_id=None):
+    def notify(self, event_name, args={}, client_id=None):
         """
-        Send notification to all guests.
+        Send notification message to certain client or all guests.
 
-        :param message: Notification message.
+        :param event_name: Notification event name.
+
+        :param args: Dict of notification args.
 
         :param client_id: Client ID to be notified. If None then it will be
-        considered a broadcast notification.
+        considered a broadcast notification for master, otherwise notification
+        will be sent to current (guest) client.
         """
-        if not self.master and not id:
+        broadcast = True
+        if not self.master and not client_id:
             # Only master can broadcast!
-            return
+            broadcast = False
 
-        inst = GuacgInstruction('notify', {'message': message})
+        inst = GuacgInstruction(event_name, args)
 
-        if not id:
-            return self.broadcast(inst.encode())
+        if not client_id:
+            print 'NOTIFY: ' + str(inst)
+            self.ws.send(inst.encode())
+            if broadcast:
+                return self.broadcast(inst.encode())
+        else:
+            # notifying another client.
+            client_ws = self._get_ws_client(client_id)
 
-        client_ws = self._get_ws_client(client_id)
-
-        if client_ws:
-            client_ws.send(inst.encode)
+            if client_ws:
+                client_ws.send(inst.encode())
 
     def broadcast(self, instruction):
         """
@@ -420,9 +472,16 @@ class GuacamoleApp(WebSocketApplication):
         and push directly to client(s) over websocket.
         """
         while True:
-            instruction = self.client.receive()
-            self.ws.send(instruction)
-            self.broadcast(instruction)
+            try:
+                if self.paused:
+                    break
+
+                instruction = self.client.receive()
+                self.ws.send(instruction)
+                self.broadcast(instruction)
+                print str(instruction)
+            except:
+                pass
 
     ###########################################################################
     # GEVENT GUACAMOLE WSCLIENT/GUESTS METHODS

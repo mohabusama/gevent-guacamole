@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2014 Mohab Usama
+ * Copyright (C) 2014 - 2015 Mohab Usama
  *
  * Permission is hereby granted, free of charge, to any person obtaining a copy
  * of this software and associated documentation files (the "Software"), to deal
@@ -21,6 +21,7 @@
  */
 
 var guac = new GuacG.App('display', '/ws/');
+var sessionId = null;
 
 var connection_args = {
     width: window.innerWidth,
@@ -54,3 +55,46 @@ var connection_args = {
 };
 
 guac.start(connection_args);
+
+
+/**
+ * MENU HANDLERS
+*/
+$(document).ready(function() {
+
+    $('#resume').click(function() {
+        var $btn = $(this);
+
+        if ($btn.attr('data-attr-status') == 'on') {
+            sessionId = guac.sessionId;
+            // We are pausing an active session.
+            guac.pause();
+
+            $btn.attr('data-attr-status', 'off');
+
+            toggleResumeButton($btn, 'off');
+        } else {
+
+            guac = new GuacG.App('display', '/ws/');
+
+            // resume session.
+            guac.resume(sessionId, connection_args);
+
+            $btn.attr('data-attr-status', 'on');
+            toggleResumeButton($btn, 'on');
+        }
+    });
+
+    function toggleResumeButton(btn, status) {
+        var span = btn.children('span');
+
+        if (status == 'on') {
+            span.removeClass('glyphicon-play');
+            span.addClass('glyphicon-pause');
+        } else {
+            span.removeClass('glyphicon-pause');
+            span.addClass('glyphicon-play');
+        }
+    }
+
+});
