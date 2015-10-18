@@ -77,14 +77,27 @@ Guacamole.Client = function(tunnel) {
      */
     var layers = {};
     
+    /**
+     * All audio channels currentl in use by the client. Initially, this will
+     * be empty, but channels may be allocated by the server upon request.
+     *
+     * @type Object.<Number, Guacamole.AudioChannel>
+     */
+    var audioChannels = {};
+
     // No initial parsers
     var parsers = [];
 
-    // No initial audio channels 
-    var audio_channels = [];
-
     // No initial streams 
     var streams = [];
+
+    /**
+     * All current objects. The index of each object is dictated by the
+     * Guacamole server.
+     *
+     * @type Guacamole.Object[]
+     */
+    var objects = [];
 
     // Pool of available stream indices
     var stream_indices = new Guacamole.IntegerPool();
@@ -294,6 +307,67 @@ Guacamole.Client = function(tunnel) {
     };
 
     /**
+     * Creates a new output stream associated with the given object and having
+     * the given mimetype and name. The legality of a mimetype and name is
+     * dictated by the object itself.
+     *
+     * @param {Number} index
+     *     The index of the object for which the output stream is being
+     *     created.
+     *
+     * @param {String} mimetype
+     *     The mimetype of the data which will be sent to the output stream.
+     *
+     * @param {String} name
+     *     The defined name of an output stream within the given object.
+     *
+     * @returns {Guacamole.OutputStream}
+     *     An output stream which will write blobs to the named output stream
+     *     of the given object.
+     */
+    this.createObjectOutputStream = function createObjectOutputStream(index, mimetype, name) {
+
+        // Allocate index
+        var streamIndex = stream_indices.next();
+
+        // Create new stream
+        tunnel.sendMessage("put", index, streamIndex, mimetype, name);
+        var stream = output_streams[streamIndex] = new Guacamole.OutputStream(guac_client, streamIndex);
+
+        // Override sendEnd() of stream to automatically free index
+        var oldEnd = stream.sendEnd;
+        stream.sendEnd = function freeStreamIndex() {
+            oldEnd();
+            stream_indices.free(streamIndex);
+            delete output_streams[streamIndex];
+        };
+
+        // Return new, overridden stream
+        return stream;
+
+    };
+
+    /**
+     * Requests read access to the input stream having the given name. If
+     * successful, a new input stream will be created.
+     *
+     * @param {Number} index
+     *     The index of the object from which the input stream is being
+     *     requested.
+     *
+     * @param {String} name
+     *     The name of the input stream to request.
+     */
+    this.requestObjectInputStream = function requestObjectInputStream(index, name) {
+
+        // Do not send requests if not connected
+        if (!isConnected())
+            return;
+
+        tunnel.sendMessage("get", index, name);
+    };
+
+    /**
      * Acknowledge receipt of a blob on the stream with the given index.
      * 
      * @param {Number} index The index of the stream associated with the
@@ -389,6 +463,20 @@ Guacamole.Client = function(tunnel) {
     this.onfile = null;
 
     /**
+     * Fired when a filesystem object is created. The object provided to this
+     * event handler will contain its own event handlers and functions for
+     * requesting and handling data.
+     *
+     * @event
+     * @param {Guacamole.Object} object
+     *     The created filesystem object.
+     *
+     * @param {String} name
+     *     The name of the filesystem.
+     */
+    this.onfilesystem = null;
+
+    /**
      * Fired when a pipe stream is created. The stream provided to this event
      * handler will contain its own event handlers for received data;
      * 
@@ -410,6 +498,27 @@ Guacamole.Client = function(tunnel) {
      *                           instruction.
      */
     this.onsync = null;
+
+    /**
+     * Returns the audio channel having the given index, creating a new channel
+     * if necessary.
+     *
+     * @param {Number} index
+     *     The index of the audio channel to retrieve.
+     *
+     * @returns {Guacamole.AudioChannel}
+     *     The audio channel having the given index.
+     */
+    var getAudioChannel = function getAudioChannel(index) {
+
+        // Get audio channel, creating it first if necessary
+        var audio_channel = audioChannels[index];
+        if (!audio_channel)
+            audio_channel = audioChannels[index] = new Guacamole.AudioChannel();
+
+        return audio_channel;
+
+    };
 
     /**
      * Returns the layer with the given index, creating it if necessary.
@@ -457,18 +566,6 @@ Guacamole.Client = function(tunnel) {
 
     }
 
-    function getAudioChannel(index) {
-
-        var audio_channel = audio_channels[index];
-
-        // If audio channel not yet created, create it
-        if (audio_channel == null)
-            audio_channel = audio_channels[index] = new Guacamole.AudioChannel();
-
-        return audio_channel;
-
-    }
-
     /**
      * Handlers for all defined layer properties.
      * @private
@@ -492,7 +589,7 @@ Guacamole.Client = function(tunnel) {
 
             var stream_index = parseInt(parameters[0]);
             var reason = parameters[1];
-            var code = parameters[2];
+            var code = parseInt(parameters[2]);
 
             // Get stream
             var stream = output_streams[stream_index];
@@ -559,6 +656,28 @@ Guacamole.Client = function(tunnel) {
 
             // Write data
             stream.onblob(data);
+
+        },
+
+        "body" : function handleBody(parameters) {
+
+            // Get object
+            var objectIndex = parseInt(parameters[0]);
+            var object = objects[objectIndex];
+
+            var streamIndex = parseInt(parameters[1]);
+            var mimetype = parameters[2];
+            var name = parameters[3];
+
+            // Create stream if handler defined
+            if (object && object.onbody) {
+                var stream = streams[streamIndex] = new Guacamole.InputStream(guac_client, streamIndex);
+                object.onbody(stream, mimetype, name);
+            }
+
+            // Otherwise, unsupported
+            else
+                guac_client.sendAck(streamIndex, "Receipt of body unsupported", 0x0100);
 
         },
 
@@ -718,7 +837,7 @@ Guacamole.Client = function(tunnel) {
         "error": function(parameters) {
 
             var reason = parameters[0];
-            var code = parameters[1];
+            var code = parseInt(parameters[1]);
 
             // Call handler if defined
             if (guac_client.onerror)
@@ -758,11 +877,60 @@ Guacamole.Client = function(tunnel) {
 
         },
 
+        "filesystem" : function handleFilesystem(parameters) {
+
+            var objectIndex = parseInt(parameters[0]);
+            var name = parameters[1];
+
+            // Create object, if supported
+            if (guac_client.onfilesystem) {
+                var object = objects[objectIndex] = new Guacamole.Object(guac_client, objectIndex);
+                guac_client.onfilesystem(object, name);
+            }
+
+            // If unsupported, simply ignore the availability of the filesystem
+
+        },
+
         "identity": function(parameters) {
 
             var layer = getLayer(parseInt(parameters[0]));
 
             display.setTransform(layer, 1, 0, 0, 1, 0, 0);
+
+        },
+
+        "img": function(parameters) {
+
+            var stream_index = parseInt(parameters[0]);
+            var channelMask = parseInt(parameters[1]);
+            var layer = getLayer(parseInt(parameters[2]));
+            var mimetype = parameters[3];
+            var x = parseInt(parameters[4]);
+            var y = parseInt(parameters[5]);
+
+            // Create stream
+            var stream = streams[stream_index] = new Guacamole.InputStream(guac_client, stream_index);
+            var reader = new Guacamole.DataURIReader(stream, mimetype);
+
+            // Draw image when stream is complete
+            reader.onend = function drawImageBlob() {
+                display.setChannelMask(layer, channelMask);
+                display.draw(layer, x, y, reader.getURI());
+            };
+
+        },
+
+        "jpeg": function(parameters) {
+
+            var channelMask = parseInt(parameters[0]);
+            var layer = getLayer(parseInt(parameters[1]));
+            var x = parseInt(parameters[2]);
+            var y = parseInt(parameters[3]);
+            var data = parameters[4];
+
+            display.setChannelMask(layer, channelMask);
+            display.draw(layer, x, y, "data:image/jpeg;base64," + data);
 
         },
 
@@ -943,11 +1111,21 @@ Guacamole.Client = function(tunnel) {
             var timestamp = parseInt(parameters[0]);
 
             // Flush display, send sync when done
-            display.flush(function __send_sync_response() {
+            display.flush(function displaySyncComplete() {
+
+                // Synchronize all audio channels
+                for (var index in audioChannels) {
+                    var audioChannel = audioChannels[index];
+                    if (audioChannel)
+                        audioChannel.sync();
+                }
+
+                // Send sync response to server
                 if (timestamp !== currentTimestamp) {
                     tunnel.sendMessage("sync", timestamp);
                     currentTimestamp = timestamp;
                 }
+
             });
 
             // If received first update, no longer waiting.
@@ -995,6 +1173,18 @@ Guacamole.Client = function(tunnel) {
             var f = parseFloat(parameters[6]);
 
             display.transform(layer, a, b, c, d, e, f);
+
+        },
+
+        "undefine" : function handleUndefine(parameters) {
+
+            // Get object
+            var objectIndex = parseInt(parameters[0]);
+            var object = objects[objectIndex];
+
+            // Signal end of object definition
+            if (object && object.onundefine)
+                object.onundefine();
 
         },
 

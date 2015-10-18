@@ -137,9 +137,16 @@ Guacamole.Tunnel.State = {
  * 
  * @constructor
  * @augments Guacamole.Tunnel
- * @param {String} tunnelURL The URL of the HTTP tunneling service.
+ *
+ * @param {String} tunnelURL
+ *     The URL of the HTTP tunneling service.
+ *
+ * @param {Boolean} [crossDomain=false]
+ *     Whether tunnel requests will be cross-domain, and thus must use CORS
+ *     mechanisms and headers. By default, it is assumed that tunnel requests
+ *     will be made to the same domain.
  */
-Guacamole.HTTPTunnel = function(tunnelURL) {
+Guacamole.HTTPTunnel = function(tunnelURL, crossDomain) {
 
     /**
      * Reference to this HTTP tunnel.
@@ -161,6 +168,10 @@ Guacamole.HTTPTunnel = function(tunnelURL) {
 
     var sendingMessages = false;
     var outputMessageBuffer = "";
+
+    // If requests are expected to be cross-domain, the cookie that the HTTP
+    // tunnel depends on will only be sent if withCredentials is true
+    var withCredentials = !!crossDomain;
 
     /**
      * The current receive timeout ID, if any.
@@ -214,6 +225,10 @@ Guacamole.HTTPTunnel = function(tunnelURL) {
 
         // Mark as closed
         tunnel.state = Guacamole.Tunnel.State.CLOSED;
+
+        // Reset output message buffer
+        sendingMessages = false;
+
         if (tunnel.onstatechange)
             tunnel.onstatechange(tunnel.state);
 
@@ -274,6 +289,7 @@ Guacamole.HTTPTunnel = function(tunnelURL) {
 
             var message_xmlhttprequest = new XMLHttpRequest();
             message_xmlhttprequest.open("POST", TUNNEL_WRITE + tunnel_uuid);
+            message_xmlhttprequest.withCredentials = withCredentials;
             message_xmlhttprequest.setRequestHeader("Content-type", "application/x-www-form-urlencoded; charset=UTF-8");
 
             // Once response received, send next queued event.
@@ -504,6 +520,7 @@ Guacamole.HTTPTunnel = function(tunnelURL) {
         // Make request, increment request ID
         var xmlhttprequest = new XMLHttpRequest();
         xmlhttprequest.open("GET", TUNNEL_READ + tunnel_uuid + ":" + (request_id++));
+        xmlhttprequest.withCredentials = withCredentials;
         xmlhttprequest.send(null);
 
         return xmlhttprequest;
@@ -543,6 +560,7 @@ Guacamole.HTTPTunnel = function(tunnelURL) {
         };
 
         connect_xmlhttprequest.open("POST", TUNNEL_CONNECT, true);
+        connect_xmlhttprequest.withCredentials = withCredentials;
         connect_xmlhttprequest.setRequestHeader("Content-type", "application/x-www-form-urlencoded; charset=UTF-8");
         connect_xmlhttprequest.send(data);
 
@@ -838,6 +856,15 @@ Guacamole.ChainedTunnel = function(tunnel_chain) {
      */
     var tunnels = [];
 
+    /**
+     * The tunnel committed via commit_tunnel(), if any, or null if no tunnel
+     * has yet been committed.
+     *
+     * @private
+     * @type Guacamole.Tunnel
+     */
+    var committedTunnel = null;
+
     // Load all tunnels into array
     for (var i=0; i<arguments.length; i++)
         tunnels.push(arguments[i]);
@@ -889,6 +916,7 @@ Guacamole.ChainedTunnel = function(tunnel_chain) {
             tunnel.onstatechange = chained_tunnel.onstatechange;
             tunnel.oninstruction = chained_tunnel.oninstruction;
             tunnel.onerror = chained_tunnel.onerror;
+            committedTunnel = tunnel;
         }
 
         // Wrap own onstatechange within current tunnel
@@ -944,8 +972,8 @@ Guacamole.ChainedTunnel = function(tunnel_chain) {
         // Remember connect data
         connect_data = data;
 
-        // Get first tunnel
-        var next_tunnel = tunnels.shift();
+        // Get committed tunnel if exists or the first tunnel on the list
+        var next_tunnel = committedTunnel ? committedTunnel : tunnels.shift();
 
         // Attach first tunnel
         if (next_tunnel)

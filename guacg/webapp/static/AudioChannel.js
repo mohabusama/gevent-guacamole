@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2013 Glyptodon LLC
+ * Copyright (C) 2015 Glyptodon LLC
  *
  * Permission is hereby granted, free of charge, to any person obtaining a copy
  * of this software and associated documentation files (the "Software"), to deal
@@ -13,7 +13,7 @@
  *
  * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
  * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
- * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+ * FITNESS FOR A PARTICULaAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
  * AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
  * LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
  * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
@@ -24,54 +24,101 @@ var Guacamole = Guacamole || {};
 
 /**
  * Abstract audio channel which queues and plays arbitrary audio data.
+ *
  * @constructor
  */
-Guacamole.AudioChannel = function() {
+Guacamole.AudioChannel = function AudioChannel() {
 
     /**
      * Reference to this AudioChannel.
+     *
      * @private
+     * @type Guacamole.AudioChannel
      */
     var channel = this;
 
     /**
-     * When the next packet should play.
+     * The earliest possible time that the next packet could play without
+     * overlapping an already-playing packet, in milliseconds.
+     *
      * @private
+     * @type Number
      */
-    var next_packet_time = 0;
+    var nextPacketTime = Guacamole.AudioChannel.getTimestamp();
+
+    /**
+     * The last time that sync() was called, in milliseconds. If sync() has
+     * never been called, this will be the time the Guacamole.AudioChannel
+     * was created.
+     *
+     * @type Number
+     */
+    var lastSync = nextPacketTime;
+
+    /**
+     * Notifies this Guacamole.AudioChannel that all audio up to the current
+     * point in time has been given via play(), and that any difference in time
+     * between queued audio packets and the current time can be considered
+     * latency.
+     */
+    this.sync = function sync() {
+
+        // Calculate elapsed time since last sync
+        var now = Guacamole.AudioChannel.getTimestamp();
+        var elapsed = now - lastSync;
+
+        // Reschedule future playback time such that playback latency is
+        // bounded within the duration of the last audio frame
+        nextPacketTime = Math.min(nextPacketTime, now + elapsed);
+
+        // Record sync time
+        lastSync = now;
+
+    };
 
     /**
      * Queues up the given data for playing by this channel once all previously
      * queued data has been played. If no data has been queued, the data will
      * play immediately.
      * 
-     * @param {String} mimetype The mimetype of the data provided.
-     * @param {Number} duration The duration of the data provided, in
-     *                          milliseconds.
-     * @param {Blob} data The blob data to play.
+     * @param {String} mimetype
+     *     The mimetype of the audio data provided.
+     *
+     * @param {Number} duration
+     *     The duration of the data provided, in milliseconds.
+     *
+     * @param {Blob} data
+     *     The blob of audio data to play.
      */
-    this.play = function(mimetype, duration, data) {
+    this.play = function play(mimetype, duration, data) {
 
-        var packet =
-            new Guacamole.AudioChannel.Packet(mimetype, data);
+        var packet = new Guacamole.AudioChannel.Packet(mimetype, data);
 
-        var now = Guacamole.AudioChannel.getTimestamp();
+        // Determine exactly when packet CAN play
+        var packetTime = Guacamole.AudioChannel.getTimestamp();
+        if (nextPacketTime < packetTime)
+            nextPacketTime = packetTime;
 
-        // If underflow is detected, reschedule new packets relative to now.
-        if (next_packet_time < now)
-            next_packet_time = now;
+        // Schedule packet
+        packet.play(nextPacketTime);
 
-        // Schedule next packet
-        packet.play(next_packet_time);
-        next_packet_time += duration;
+        // Update timeline
+        nextPacketTime += duration;
 
     };
 
 };
 
 // Define context if available
-if (window.webkitAudioContext) {
-    Guacamole.AudioChannel.context = new webkitAudioContext();
+if (window.AudioContext) {
+    try {Guacamole.AudioChannel.context = new AudioContext();}
+    catch (e){}
+}
+
+// Fallback to Webkit-specific AudioContext implementation
+else if (window.webkitAudioContext) {
+    try {Guacamole.AudioChannel.context = new webkitAudioContext();}
+    catch (e){}
 }
 
 /**
@@ -121,7 +168,7 @@ Guacamole.AudioChannel.Packet = function(mimetype, data) {
      * @param {Number} when The time this packet should be played, in
      *                      milliseconds.
      */
-    this.play = undefined; // Defined conditionally depending on support
+    this.play = function(when) { /* NOP */ }; // Defined conditionally depending on support
 
     // If audio API available, use it.
     if (Guacamole.AudioChannel.context) {
@@ -148,11 +195,15 @@ Guacamole.AudioChannel.Packet = function(mimetype, data) {
         var source = Guacamole.AudioChannel.context.createBufferSource();
         source.connect(Guacamole.AudioChannel.context.destination);
 
+        // Use noteOn() instead of start() if necessary
+        if (!source.start)
+            source.start = source.noteOn;
+
         var play_when;
 
         function playDelayed(buffer) {
             source.buffer = buffer;
-            source.noteOn(play_when / 1000);
+            source.start(play_when / 1000);
         }
 
         /** @ignore */
@@ -177,57 +228,63 @@ Guacamole.AudioChannel.Packet = function(mimetype, data) {
         var play_on_load = false;
 
         // Create audio element to house and play the data
-        var audio = new Audio();
+        var audio = null;
+        try { audio = new Audio(); }
+        catch (e) {}
 
-        // Read data and start decoding
-        var reader = new FileReader();
-        reader.onload = function() {
+        if (audio) {
 
-            var binary = "";
-            var bytes = new Uint8Array(reader.result);
+            // Read data and start decoding
+            var reader = new FileReader();
+            reader.onload = function() {
 
-            // Produce binary string from bytes in buffer
-            for (var i=0; i<bytes.byteLength; i++)
-                binary += String.fromCharCode(bytes[i]);
+                var binary = "";
+                var bytes = new Uint8Array(reader.result);
 
-            // Convert to data URI 
-            audio.src = "data:" + mimetype + ";base64," + window.btoa(binary);
+                // Produce binary string from bytes in buffer
+                for (var i=0; i<bytes.byteLength; i++)
+                    binary += String.fromCharCode(bytes[i]);
 
-            // Play if play was attempted but packet wasn't loaded yet
-            if (play_on_load)
-                audio.play();
+                // Convert to data URI 
+                audio.src = "data:" + mimetype + ";base64," + window.btoa(binary);
 
-        };
-        reader.readAsArrayBuffer(data);
-   
-        function play() {
+                // Play if play was attempted but packet wasn't loaded yet
+                if (play_on_load)
+                    audio.play();
 
-            // If audio data is ready, play now
-            if (audio.src)
-                audio.play();
+            };
+            reader.readAsArrayBuffer(data);
+       
+            function play() {
 
-            // Otherwise, play when loaded
-            else
-                play_on_load = true;
+                // If audio data is ready, play now
+                if (audio.src)
+                    audio.play();
+
+                // Otherwise, play when loaded
+                else
+                    play_on_load = true;
+
+            }
+            
+            /** @ignore */
+            this.play = function(when) {
+                
+                // Calculate time until play
+                var now = Guacamole.AudioChannel.getTimestamp();
+                var delay = when - now;
+                
+                // Play now if too late
+                if (delay < 0)
+                    play();
+
+                // Otherwise, schedule later playback
+                else
+                    window.setTimeout(play, delay);
+
+            };
 
         }
-        
-        /** @ignore */
-        this.play = function(when) {
-            
-            // Calculate time until play
-            var now = Guacamole.AudioChannel.getTimestamp();
-            var delay = when - now;
-            
-            // Play now if too late
-            if (delay < 0)
-                play();
-
-            // Otherwise, schedule later playback
-            else
-                window.setTimeout(play, delay);
-
-        };
 
     }
 
