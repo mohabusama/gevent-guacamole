@@ -1,4 +1,5 @@
 import uuid
+import time
 import gevent
 
 from parking import ParkingLot
@@ -90,15 +91,12 @@ class GuacamoleApp(WebSocketApplication):
         self.client = GuacamoleClient('localhost', 4822)
 
         # @TODO: Move this to GuacamoleClient.
-        self.client.id = str(uuid.uuid4())
+        self.client.session_id = str(uuid.uuid4())
 
     def on_message(self, message):
         """
         New message received on the websocket.
         """
-        if GuacgInstruction.is_valid(message):
-            print message
-
         if self.is_connect(message):
             # Client is not connected, message should include connection args.
             # @TODO: Check possibility/consequences of duplicate `connect`
@@ -114,7 +112,6 @@ class GuacamoleApp(WebSocketApplication):
             if self.control:
                 # Send message to guacd server if on control!
                 # @TODO: Needs a FIX, as *only* Master client should be used!
-                print 'SENDING: ' + message
                 self.client.send(message)
 
     def on_close(self, reason):
@@ -123,12 +120,13 @@ class GuacamoleApp(WebSocketApplication):
         """
         # @TODO: consider reconnect from client. (network glitch?!)
         # @TODO: One solution is to pause client instead of termination.
-        print 'SOCKET CLOSED: ' + self.client.id
         if not self.master:
             # This is a guest. Let the master know!
             master_ws_client = self._get_ws_client(self.master_session_id)
             if master_ws_client:
                 self._leave_master(master_ws_client)
+
+        time.sleep(0.2)
 
         self._stop_listener()
 
@@ -200,7 +198,7 @@ class GuacamoleApp(WebSocketApplication):
         self.master = self.control = True
 
         return self.notify('sessionstarted',
-                           {'sessionId': self.client.id})
+                           {'sessionId': self.client.session_id})
 
     def join(self, session_id):
         """
@@ -208,7 +206,7 @@ class GuacamoleApp(WebSocketApplication):
 
         :param session_id: Existing GuacamoleClient ID.
         """
-        if session_id == self.client.id:
+        if session_id == self.client.session_id:
             # A master cannot join as a guest!
             return
 
@@ -227,18 +225,13 @@ class GuacamoleApp(WebSocketApplication):
 
         :param connection_args: dict with optional connection args
         """
-        print '============'
-        print 'RESUMING ' + session_id
         # First, get the parked client, if exists!
         self.client = retrieve_client(session_id)
-
-        print 'RESUMING CLIENT: ' + self.client.id
 
         if not self.client:
             # Client was not parked!
             # @TODO: Raise custom exception, return error!
             # @TODO: is client controlled by another master WS?!
-            print 'NO CLIENT'
             return None
 
         # @TODO: Disconnect if client is controlled by another WS.
@@ -347,8 +340,6 @@ class GuacamoleApp(WebSocketApplication):
 
         park_client(self.client)
 
-        print 'PARKED CLIENT! - ' + self.client.id
-
         self.notify('sessionpaused')
 
     def control(self, args):
@@ -421,7 +412,6 @@ class GuacamoleApp(WebSocketApplication):
         inst = GuacgInstruction(event_name, args)
 
         if not client_id:
-            print 'NOTIFY: ' + str(inst)
             self.ws.send(inst.encode())
             if broadcast:
                 return self.broadcast(inst.encode())
@@ -479,7 +469,6 @@ class GuacamoleApp(WebSocketApplication):
                 instruction = self.client.receive()
                 self.ws.send(instruction)
                 self.broadcast(instruction)
-                print str(instruction)
             except:
                 pass
 
@@ -508,7 +497,7 @@ class GuacamoleApp(WebSocketApplication):
         :param master: Master WS client.
         """
         for guest in master.guests:
-            if guest.client.id == self.client.id:
+            if guest.client.id == self.client.session_id:
                 # Our ws client is already in the guests list!
                 return
 
@@ -525,7 +514,7 @@ class GuacamoleApp(WebSocketApplication):
 
         :param client_id: The guest client ID.
         """
-        guest_id = client_id if client_id else self.client.id
+        guest_id = client_id if client_id else self.client.session_id
 
         for guest in master.guests:
             if guest.client.id == guest_id:
