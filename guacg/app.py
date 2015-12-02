@@ -6,7 +6,8 @@ from guacamole.client import GuacamoleClient, PROTOCOL_NAME
 
 try:
     # Add local_settings.py with RDP connection variables
-    from local_settings import USERNAME, PASSWORD, HOST, PORT, DOMAIN, APP, SEC
+    from local_settings import (
+        PROTOCOL, USERNAME, PASSWORD, HOST, PORT, DOMAIN, APP, SEC)
 except ImportError:
     USERNAME = ''
     PASSWORD = ''
@@ -44,7 +45,7 @@ class GuacamoleApp(WebSocketApplication):
         self.client = GuacamoleClient('localhost', 4822)
 
         # @TODO: get Remote server connection properties
-        self.client.handshake(protocol='rdp', hostname=HOST,
+        self.client.handshake(protocol=PROTOCOL, hostname=HOST,
                               port=PORT, username=USERNAME,
                               password=PASSWORD, domain=DOMAIN,
                               security=SEC, remote_app=APP)

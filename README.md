@@ -16,11 +16,12 @@ Add **local_settings.py** with RDP connection parameters. Example:
 USERNAME = 'mohab'
 PASSWORD = 'myPass'
 
-# Windows Application server
+# Remote Application server
+PROTOCOL = 'rdp'  # or 'vnc'
 HOST = '192.168.20.14'
-PORT = 3389
-DOMAIN = 'guacg'
-APP = '||notepad'
+PORT = 3389  # or '5901' for VNC
+DOMAIN = 'guacg'  # if required!
+APP = '||notepad'  # if required!
 SEC = ''
 ```
 
