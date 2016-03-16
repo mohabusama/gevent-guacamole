@@ -51,15 +51,16 @@ Guacamole.Tunnel = function() {
      * Send the given message through the tunnel to the service on the other
      * side. All messages are guaranteed to be received in the order sent.
      * 
-     * @param {...} elements The elements of the message to send to the
-     *                       service on the other side of the tunnel.
+     * @param {...*} elements
+     *     The elements of the message to send to the service on the other side
+     *     of the tunnel.
      */
     this.sendMessage = function(elements) {};
 
     /**
      * The current state of this tunnel.
      * 
-     * @type Number
+     * @type {Number}
      */
     this.state = Guacamole.Tunnel.State.CONNECTING;
 
@@ -68,7 +69,7 @@ Guacamole.Tunnel = function() {
      * milliseconds. If data is not received within this amount of time,
      * the tunnel is closed with an error. The default value is 15000.
      * 
-     * @type Number
+     * @type {Number}
      */
     this.receiveTimeout = 15000;
 
@@ -110,14 +111,14 @@ Guacamole.Tunnel.State = {
      * A connection is in pending. It is not yet known whether connection was
      * successful.
      * 
-     * @type Number
+     * @type {Number}
      */
     "CONNECTING": 0,
 
     /**
      * Connection was successful, and data is being received.
      * 
-     * @type Number
+     * @type {Number}
      */
     "OPEN": 1,
 
@@ -126,7 +127,7 @@ Guacamole.Tunnel.State = {
      * tunnel may have been explicitly closed by either side, or an error may
      * have occurred.
      * 
-     * @type Number
+     * @type {Number}
      */
     "CLOSED": 2
 
@@ -832,9 +833,10 @@ Guacamole.WebSocketTunnel.prototype = new Guacamole.Tunnel();
  * 
  * @constructor
  * @augments Guacamole.Tunnel
- * @param {...} tunnel_chain The tunnels to use, in order of priority.
+ * @param {...*} tunnelChain
+ *     The tunnels to use, in order of priority.
  */
-Guacamole.ChainedTunnel = function(tunnel_chain) {
+Guacamole.ChainedTunnel = function(tunnelChain) {
 
     /**
      * Reference to this chained tunnel.
@@ -861,7 +863,7 @@ Guacamole.ChainedTunnel = function(tunnel_chain) {
      * has yet been committed.
      *
      * @private
-     * @type Guacamole.Tunnel
+     * @type {Guacamole.Tunnel}
      */
     var committedTunnel = null;
 
@@ -884,12 +886,23 @@ Guacamole.ChainedTunnel = function(tunnel_chain) {
         /**
          * Fails the currently-attached tunnel, attaching a new tunnel if
          * possible.
-         * 
+         *
          * @private
-         * @return {Guacamole.Tunnel} The next tunnel, or null if there are no
-         *                            more tunnels to try.
+         * @param {Guacamole.Status} [status]
+         *     An object representing the failure that occured in the
+         *     currently-attached tunnel, if known.
+         *
+         * @return {Guacamole.Tunnel}
+         *     The next tunnel, or null if there are no more tunnels to try or
+         *     if no more tunnels should be tried.
          */
-        function fail_tunnel() {
+        var failTunnel = function failTunnel(status) {
+
+            // Do not attempt to continue using next tunnel on server timeout
+            if (status && status.code === Guacamole.Status.Code.UPSTREAM_TIMEOUT) {
+                tunnels = [];
+                return null;
+            }
 
             // Get next tunnel
             var next_tunnel = tunnels.shift();
@@ -904,7 +917,7 @@ Guacamole.ChainedTunnel = function(tunnel_chain) {
 
             return next_tunnel;
 
-        }
+        };
 
         /**
          * Use the current tunnel from this point forward. Do not try any more
@@ -933,7 +946,7 @@ Guacamole.ChainedTunnel = function(tunnel_chain) {
 
                 // If closed, mark failure, attempt next tunnel
                 case Guacamole.Tunnel.State.CLOSED:
-                    if (!fail_tunnel() && chained_tunnel.onstatechange)
+                    if (!failTunnel() && chained_tunnel.onstatechange)
                         chained_tunnel.onstatechange(state);
                     break;
                 
@@ -957,7 +970,7 @@ Guacamole.ChainedTunnel = function(tunnel_chain) {
         tunnel.onerror = function(status) {
 
             // Mark failure, attempt next tunnel
-            if (!fail_tunnel() && chained_tunnel.onerror)
+            if (!failTunnel(status) && chained_tunnel.onerror)
                 chained_tunnel.onerror(status);
 
         };

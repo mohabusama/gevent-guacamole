@@ -82,7 +82,7 @@ Guacamole.Display = function() {
      * the relative location within the image of the mouse cursor at which
      * each click occurs.
      * 
-     * @type Number
+     * @type {Number}
      */
     this.cursorHotspotX = 0;
 
@@ -91,7 +91,7 @@ Guacamole.Display = function() {
      * the relative location within the image of the mouse cursor at which
      * each click occurs.
      * 
-     * @type Number
+     * @type {Number}
      */
     this.cursorHotspotY = 0;
 
@@ -101,7 +101,7 @@ Guacamole.Display = function() {
      * the location of the cursor image within the Guacamole display, as
      * last set by moveCursor().
      * 
-     * @type Number
+     * @type {Number}
      */
     this.cursorX = 0;
 
@@ -111,7 +111,7 @@ Guacamole.Display = function() {
      * the location of the cursor image within the Guacamole display, as
      * last set by moveCursor().
      * 
-     * @type Number
+     * @type {Number}
      */
     this.cursorY = 0;
 
@@ -143,7 +143,7 @@ Guacamole.Display = function() {
      * front of the queue (FIFO). These tasks will eventually be grouped
      * into a Frame.
      * @private
-     * @type Task[]
+     * @type {Task[]}
      */
     var tasks = [];
 
@@ -151,7 +151,7 @@ Guacamole.Display = function() {
      * The queue of all frames. Each frame is a pairing of an array of tasks
      * and a callback which must be called when the frame is rendered.
      * @private
-     * @type Frame[]
+     * @type {Frame[]}
      */
     var frames = [];
 
@@ -251,7 +251,7 @@ Guacamole.Display = function() {
         /**
          * Whether this Task is blocked.
          * 
-         * @type boolean
+         * @type {boolean}
          */
         this.blocked = blocked;
 
@@ -1141,7 +1141,7 @@ Guacamole.Display.VisibleLayer = function(width, height) {
      * to the Guacamole protocol, and not relevant at this level.
      * 
      * @private
-     * @type Number
+     * @type {Number}
      */
     this.__unique_id = Guacamole.Display.VisibleLayer.__next_id++;
 
@@ -1154,20 +1154,20 @@ Guacamole.Display.VisibleLayer = function(width, height) {
     /**
      * X coordinate of the upper-left corner of this layer container within
      * its parent, in pixels.
-     * @type Number
+     * @type {Number}
      */
     this.x = 0;
 
     /**
      * Y coordinate of the upper-left corner of this layer container within
      * its parent, in pixels.
-     * @type Number
+     * @type {Number}
      */
     this.y = 0;
 
     /**
      * Z stacking order of this layer relative to other sibling layers.
-     * @type Number
+     * @type {Number}
      */
     this.z = 0;
 
@@ -1177,13 +1177,13 @@ Guacamole.Display.VisibleLayer = function(width, height) {
      * three values being the first row, and the last three values being the
      * second row. There are six values total.
      * 
-     * @type Number[]
+     * @type {Number[]}
      */
     this.matrix = [1, 0, 0, 1, 0, 0];
 
     /**
      * The parent layer container of this layer, if any.
-     * @type Guacamole.Display.LayerContainer
+     * @type {Guacamole.Display.VisibleLayer}
      */
     this.parent = null;
 
@@ -1275,11 +1275,11 @@ Guacamole.Display.VisibleLayer = function(width, height) {
     };
 
     /**
-     * Moves the upper-left corner of this LayerContainer to the given X and Y
-     * coordinate, sets the Z stacking order, and reparents this LayerContainer
-     * to the given LayerContainer.
+     * Moves the upper-left corner of this VisibleLayer to the given X and Y
+     * coordinate, sets the Z stacking order, and reparents this VisibleLayer
+     * to the given VisibleLayer.
      * 
-     * @param {Guacamole.Display.LayerContainer} parent The parent to set.
+     * @param {Guacamole.Display.VisibleLayer} parent The parent to set.
      * @param {Number} x The X coordinate to move to.
      * @param {Number} y The Y coordinate to move to.
      * @param {Number} z The Z coordinate to move to.
@@ -1378,10 +1378,10 @@ Guacamole.Display.VisibleLayer = function(width, height) {
 
 /**
  * The next identifier to be assigned to the layer container. This identifier
- * uniquely identifies each LayerContainer, but is unrelated to the index of
+ * uniquely identifies each VisibleLayer, but is unrelated to the index of
  * the layer, which exists at the protocol/client level only.
  * 
  * @private
- * @type Number
+ * @type {Number}
  */
 Guacamole.Display.VisibleLayer.__next_id = 0;
