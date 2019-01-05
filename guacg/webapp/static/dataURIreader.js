@@ -21,54 +21,62 @@ var Guacamole = Guacamole || {};
 
 /**
  * A reader which automatically handles the given input stream, returning
- * strictly received packets as array buffers. Note that this object will
- * overwrite any installed event handlers on the given Guacamole.InputStream.
+ * received blobs as a single data URI built over the course of the stream.
+ * Note that this object will overwrite any installed event handlers on the
+ * given Guacamole.InputStream.
  * 
  * @constructor
- * @param {Guacamole.InputStream} stream The stream that data will be read
- *                                       from.
+ * @param {Guacamole.InputStream} stream
+ *     The stream that data will be read from.
  */
-Guacamole.ArrayBufferReader = function(stream) {
+Guacamole.DataURIReader = function(stream, mimetype) {
 
     /**
-     * Reference to this Guacamole.InputStream.
+     * Reference to this Guacamole.DataURIReader.
      * @private
      */
     var guac_reader = this;
 
+    /**
+     * Current data URI.
+     *
+     * @private
+     * @type {String}
+     */
+    var uri = 'data:' + mimetype + ';base64,';
+
     // Receive blobs as array buffers
-    stream.onblob = function(data) {
+    stream.onblob = function dataURIReaderBlob(data) {
 
-        // Convert to ArrayBuffer
-        var binary = window.atob(data);
-        var arrayBuffer = new ArrayBuffer(binary.length);
-        var bufferView = new Uint8Array(arrayBuffer);
-
-        for (var i=0; i<binary.length; i++)
-            bufferView[i] = binary.charCodeAt(i);
-
-        // Call handler, if present
-        if (guac_reader.ondata)
-            guac_reader.ondata(arrayBuffer);
+        // Currently assuming data will ALWAYS be safe to simply append. This
+        // will not be true if the received base64 data encodes a number of
+        // bytes that isn't a multiple of three (as base64 expands in a ratio
+        // of exactly 3:4).
+        uri += data;
 
     };
 
     // Simply call onend when end received
-    stream.onend = function() {
+    stream.onend = function dataURIReaderEnd() {
         if (guac_reader.onend)
             guac_reader.onend();
     };
 
     /**
-     * Fired once for every blob of data received.
-     * 
-     * @event
-     * @param {ArrayBuffer} buffer The data packet received.
+     * Returns the data URI of all data received through the underlying stream
+     * thus far.
+     *
+     * @returns {String}
+     *     The data URI of all data received through the underlying stream thus
+     *     far.
      */
-    this.ondata = null;
+    this.getURI = function getURI() {
+        return uri;
+    };
 
     /**
      * Fired once this stream is finished and no further data will be written.
+     *
      * @event
      */
     this.onend = null;

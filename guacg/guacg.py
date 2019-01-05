@@ -15,11 +15,11 @@ def run(address='', port=6060, endpoint='/', static=False, debug=False):
     Run our websocket server with configured urls.
     """
 
-    resources = {'/ws': GuacamoleApp}
+    resources = [('/ws', GuacamoleApp)]
 
     if static:
         # we need to serve static webapp as well
-        resources.update(get_webapp_resources(debug))
+        resources += get_webapp_resources(debug)
 
     WebSocketServer(
         (address, int(port)),

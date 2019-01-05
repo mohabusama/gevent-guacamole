@@ -25,19 +25,18 @@ APP = '||notepad'  # if required!
 SEC = ''
 ```
 
-[Install](http://guac-dev.org/doc/gug/installing-guacamole.html) & Run Guacamole **guacd** (0.9.0) server. Preferably in foreground to view the connection output.
+[Install](https://guacamole.apache.org/doc/gug/guacamole-docker.html) & Run Guacamole **guacd** server. Preferably using built Docker image.
 
 ```
-$ guacd -f
-guacd[10352]: INFO:  Guacamole proxy daemon (guacd) version 0.9.0
-guacd[10352]: INFO:  Unable to bind socket to host ::1, port 4822: Address family not supported by protocol
-guacd[10352]: INFO:  Successfully bound socket to host 127.0.0.1, port 4822
-guacd[10352]: INFO:  Listening on host 127.0.0.1, port 4822
+$ docker run --name guacd -p 4822:4822 guacamole/guacd
+guacd[1]: INFO: Guacamole proxy daemon (guacd) version 0.9.14 started
+guacd[1]: INFO: Listening on host 0.0.0.0, port 4822
 ```
 
 Then run **guacg** server with *--static* to serve a minimal Flask webapp.
 
 ```
+$ cd guacg
 $ python guacg.py --static
 ```
 

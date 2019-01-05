@@ -1,7 +1,4 @@
-Flask==0.10.1
-Werkzeug==0.9.4
-argparse==1.2.1
-gevent==1.0.1
-gevent-websocket==0.9.3
-pyguacamole==0.1.0
-wsgiref==0.1.2
+Flask
+gevent
+gevent-websocket
+pyguacamole

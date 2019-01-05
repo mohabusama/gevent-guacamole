@@ -25,7 +25,4 @@ def get_webapp_resources(debug=False):
     """
     flask_app.debug = debug
     app = DebuggedApplication(flask_app)
-    return {
-        '^/$': app,
-        '^/static/.*$': app
-    }
+    return [('^/static/.*$', app), ('^/.*$', app)]

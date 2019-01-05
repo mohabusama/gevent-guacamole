@@ -1,23 +1,20 @@
 /*
- * Copyright (C) 2013 Glyptodon LLC
+ * Licensed to the Apache Software Foundation (ASF) under one
+ * or more contributor license agreements.  See the NOTICE file
+ * distributed with this work for additional information
+ * regarding copyright ownership.  The ASF licenses this file
+ * to you under the Apache License, Version 2.0 (the
+ * "License"); you may not use this file except in compliance
+ * with the License.  You may obtain a copy of the License at
  *
- * Permission is hereby granted, free of charge, to any person obtaining a copy
- * of this software and associated documentation files (the "Software"), to deal
- * in the Software without restriction, including without limitation the rights
- * to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
- * copies of the Software, and to permit persons to whom the Software is
- * furnished to do so, subject to the following conditions:
+ *   http://www.apache.org/licenses/LICENSE-2.0
  *
- * The above copyright notice and this permission notice shall be included in
- * all copies or substantial portions of the Software.
- *
- * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
- * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
- * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
- * AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
- * LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
- * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
- * THE SOFTWARE.
+ * Unless required by applicable law or agreed to in writing,
+ * software distributed under the License is distributed on an
+ * "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
+ * KIND, either express or implied.  See the License for the
+ * specific language governing permissions and limitations
+ * under the License.
  */
 
 var Guacamole = Guacamole || {};
@@ -49,24 +46,24 @@ Guacamole.Mouse = function(element) {
      * The minimum amount of pixels scrolled required for a single scroll button
      * click.
      */
-    this.scrollThreshold = 120;
+    this.scrollThreshold = 53;
 
     /**
      * The number of pixels to scroll per line.
      */
-    this.PIXELS_PER_LINE = 40;
+    this.PIXELS_PER_LINE = 18;
 
     /**
      * The number of pixels to scroll per page.
      */
-    this.PIXELS_PER_PAGE = 640;
+    this.PIXELS_PER_PAGE = this.PIXELS_PER_LINE * 16;
 
     /**
      * The current mouse state. The properties of this state are updated when
      * mouse events fire. This state object is also passed in as a parameter to
      * the handler of any mouse events.
      * 
-     * @type Guacamole.Mouse.State
+     * @type {Guacamole.Mouse.State}
      */
     this.currentState = new Guacamole.Mouse.State(
         0, 0, 
@@ -101,6 +98,14 @@ Guacamole.Mouse = function(element) {
 	this.onmousemove = null;
 
     /**
+     * Fired whenever the mouse leaves the boundaries of the element associated
+     * with this Guacamole.Mouse.
+     * 
+     * @event
+     */
+	this.onmouseout = null;
+
+    /**
      * Counter of mouse events to ignore. This decremented by mousemove, and
      * while non-zero, mouse events will have no effect.
      * @private
@@ -111,6 +116,8 @@ Guacamole.Mouse = function(element) {
      * Cumulative scroll delta amount. This value is accumulated through scroll
      * events and results in scroll button clicks if it exceeds a certain
      * threshold.
+     *
+     * @private
      */
     var scroll_delta = 0;
 
@@ -199,7 +206,7 @@ Guacamole.Mouse = function(element) {
 
         // Check that mouseout is due to actually LEAVING the element
         var target = e.relatedTarget || e.toElement;
-        while (target !== null) {
+        while (target) {
             if (target === element)
                 return;
             target = target.parentNode;
@@ -219,6 +226,10 @@ Guacamole.Mouse = function(element) {
             if (guac_mouse.onmouseup)
                 guac_mouse.onmouseup(guac_mouse.currentState);
         }
+
+        // Fire onmouseout event
+        if (guac_mouse.onmouseout)
+            guac_mouse.onmouseout();
 
     }, false);
 
@@ -262,36 +273,52 @@ Guacamole.Mouse = function(element) {
         scroll_delta += delta;
 
         // Up
-        while (scroll_delta <= -guac_mouse.scrollThreshold) {
+        if (scroll_delta <= -guac_mouse.scrollThreshold) {
 
-            if (guac_mouse.onmousedown) {
-                guac_mouse.currentState.up = true;
-                guac_mouse.onmousedown(guac_mouse.currentState);
-            }
+            // Repeatedly click the up button until insufficient delta remains
+            do {
 
-            if (guac_mouse.onmouseup) {
-                guac_mouse.currentState.up = false;
-                guac_mouse.onmouseup(guac_mouse.currentState);
-            }
+                if (guac_mouse.onmousedown) {
+                    guac_mouse.currentState.up = true;
+                    guac_mouse.onmousedown(guac_mouse.currentState);
+                }
 
-            scroll_delta += guac_mouse.scrollThreshold;
+                if (guac_mouse.onmouseup) {
+                    guac_mouse.currentState.up = false;
+                    guac_mouse.onmouseup(guac_mouse.currentState);
+                }
+
+                scroll_delta += guac_mouse.scrollThreshold;
+
+            } while (scroll_delta <= -guac_mouse.scrollThreshold);
+
+            // Reset delta
+            scroll_delta = 0;
 
         }
 
         // Down
-        while (scroll_delta >= guac_mouse.scrollThreshold) {
+        if (scroll_delta >= guac_mouse.scrollThreshold) {
 
-            if (guac_mouse.onmousedown) {
-                guac_mouse.currentState.down = true;
-                guac_mouse.onmousedown(guac_mouse.currentState);
-            }
+            // Repeatedly click the down button until insufficient delta remains
+            do {
 
-            if (guac_mouse.onmouseup) {
-                guac_mouse.currentState.down = false;
-                guac_mouse.onmouseup(guac_mouse.currentState);
-            }
+                if (guac_mouse.onmousedown) {
+                    guac_mouse.currentState.down = true;
+                    guac_mouse.onmousedown(guac_mouse.currentState);
+                }
 
-            scroll_delta -= guac_mouse.scrollThreshold;
+                if (guac_mouse.onmouseup) {
+                    guac_mouse.currentState.down = false;
+                    guac_mouse.onmouseup(guac_mouse.currentState);
+                }
+
+                scroll_delta -= guac_mouse.scrollThreshold;
+
+            } while (scroll_delta >= guac_mouse.scrollThreshold);
+
+            // Reset delta
+            scroll_delta = 0;
 
         }
 
@@ -302,6 +329,68 @@ Guacamole.Mouse = function(element) {
     element.addEventListener('DOMMouseScroll', mousewheel_handler, false);
     element.addEventListener('mousewheel',     mousewheel_handler, false);
     element.addEventListener('wheel',          mousewheel_handler, false);
+
+    /**
+     * Whether the browser supports CSS3 cursor styling, including hotspot
+     * coordinates.
+     *
+     * @private
+     * @type {Boolean}
+     */
+    var CSS3_CURSOR_SUPPORTED = (function() {
+
+        var div = document.createElement("div");
+
+        // If no cursor property at all, then no support
+        if (!("cursor" in div.style))
+            return false;
+
+        try {
+            // Apply simple 1x1 PNG
+            div.style.cursor = "url(data:image/png;base64,"
+                             + "iVBORw0KGgoAAAANSUhEUgAAAAEAAAAB"
+                             + "AQMAAAAl21bKAAAAA1BMVEX///+nxBvI"
+                             + "AAAACklEQVQI12NgAAAAAgAB4iG8MwAA"
+                             + "AABJRU5ErkJggg==) 0 0, auto";
+        }
+        catch (e) {
+            return false;
+        }
+
+        // Verify cursor property is set to URL with hotspot
+        return /\burl\([^()]*\)\s+0\s+0\b/.test(div.style.cursor || "");
+
+    })();
+
+    /**
+     * Changes the local mouse cursor to the given canvas, having the given
+     * hotspot coordinates. This affects styling of the element backing this
+     * Guacamole.Mouse only, and may fail depending on browser support for
+     * setting the mouse cursor.
+     * 
+     * If setting the local cursor is desired, it is up to the implementation
+     * to do something else, such as use the software cursor built into
+     * Guacamole.Display, if the local cursor cannot be set.
+     *
+     * @param {HTMLCanvasElement} canvas The cursor image.
+     * @param {Number} x The X-coordinate of the cursor hotspot.
+     * @param {Number} y The Y-coordinate of the cursor hotspot.
+     * @return {Boolean} true if the cursor was successfully set, false if the
+     *                   cursor could not be set for any reason.
+     */
+    this.setCursor = function(canvas, x, y) {
+
+        // Attempt to set via CSS3 cursor styling
+        if (CSS3_CURSOR_SUPPORTED) {
+            var dataURL = canvas.toDataURL('image/png');
+            element.style.cursor = "url(" + dataURL + ") " + x + " " + y + ", auto";
+            return true;
+        }
+
+        // Otherwise, setting cursor failed
+        return false;
+
+    };
 
 };
 
@@ -329,31 +418,31 @@ Guacamole.Mouse.State = function(x, y, left, middle, right, up, down) {
 
     /**
      * The current X position of the mouse pointer.
-     * @type Number
+     * @type {Number}
      */
     this.x = x;
 
     /**
      * The current Y position of the mouse pointer.
-     * @type Number
+     * @type {Number}
      */
     this.y = y;
 
     /**
      * Whether the left mouse button is currently pressed.
-     * @type Boolean
+     * @type {Boolean}
      */
     this.left = left;
 
     /**
      * Whether the middle mouse button is currently pressed.
-     * @type Boolean
+     * @type {Boolean}
      */
     this.middle = middle;
 
     /**
      * Whether the right mouse button is currently pressed.
-     * @type Boolean
+     * @type {Boolean}
      */
     this.right = right;
 
@@ -361,7 +450,7 @@ Guacamole.Mouse.State = function(x, y, left, middle, right, up, down) {
      * Whether the up mouse button is currently pressed. This is the fourth
      * mouse button, associated with upward scrolling of the mouse scroll
      * wheel.
-     * @type Boolean
+     * @type {Boolean}
      */
     this.up = up;
 
@@ -369,7 +458,7 @@ Guacamole.Mouse.State = function(x, y, left, middle, right, up, down) {
      * Whether the down mouse button is currently pressed. This is the fifth 
      * mouse button, associated with downward scrolling of the mouse scroll
      * wheel.
-     * @type Boolean
+     * @type {Boolean}
      */
     this.down = down;
 
@@ -452,7 +541,7 @@ Guacamole.Mouse.Touchpad = function(element) {
      * mouse events fire. This state object is also passed in as a parameter to
      * the handler of any mouse events.
      * 
-     * @type Guacamole.Mouse.State
+     * @type {Guacamole.Mouse.State}
      */
     this.currentState = new Guacamole.Mouse.State(
         0, 0, 
@@ -507,7 +596,6 @@ Guacamole.Mouse.Touchpad = function(element) {
 
     element.addEventListener("touchend", function(e) {
         
-        e.stopPropagation();
         e.preventDefault();
             
         // If we're handling a gesture AND this is the last touch
@@ -569,7 +657,6 @@ Guacamole.Mouse.Touchpad = function(element) {
 
     element.addEventListener("touchstart", function(e) {
 
-        e.stopPropagation();
         e.preventDefault();
 
         // Track number of touches, but no more than three
@@ -601,7 +688,6 @@ Guacamole.Mouse.Touchpad = function(element) {
 
     element.addEventListener("touchmove", function(e) {
 
-        e.stopPropagation();
         e.preventDefault();
 
         // Get change in touch location
@@ -702,6 +788,8 @@ Guacamole.Mouse.Touchscreen = function(element) {
     /**
      * Whether a gesture is known to be in progress. If false, touch events
      * will be ignored.
+     *
+     * @private
      */
     var gesture_in_progress = false;
 
@@ -719,11 +807,15 @@ Guacamole.Mouse.Touchscreen = function(element) {
 
     /**
      * The timeout associated with the delayed, cancellable click release.
+     *
+     * @private
      */
     var click_release_timeout = null;
 
     /**
      * The timeout associated with long-press for right click.
+     *
+     * @private
      */
     var long_press_timeout = null;
 
@@ -756,7 +848,7 @@ Guacamole.Mouse.Touchscreen = function(element) {
      * mouse events fire. This state object is also passed in as a parameter to
      * the handler of any mouse events.
      *
-     * @type Guacamole.Mouse.State
+     * @type {Guacamole.Mouse.State}
      */
     this.currentState = new Guacamole.Mouse.State(
         0, 0,
@@ -983,7 +1075,6 @@ Guacamole.Mouse.Touchscreen = function(element) {
         if (guac_touchscreen.currentState.left) {
 
             e.preventDefault();
-            e.stopPropagation();
 
             // Update state
             var touch = e.touches[0];
